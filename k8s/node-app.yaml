@@ -1,0 +1,52 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-app
+  namespace: devops-assessment
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: node-app
+
+  template:
+    metadata:
+      labels:
+        app: node-app
+
+    spec:
+      containers:
+        - name: node-app
+          image: node-postgres-api:1.0
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z -w 2 127.0.0.1 5432; do
+                echo "Waiting for database proxy..."
+                sleep 2
+              done
+              echo "Database proxy is ready. Starting Node.js..."
+              npm start
+
+          ports:
+            - containerPort: 3000
+
+          envFrom:
+            - secretRef:
+                name: app-secrets
+
+        - name: database-proxy
+          image: alpine/socat
+          command:
+            - socat
+            - TCP-LISTEN:5432,fork,reuseaddr
+            - TCP:postgres:5432
+
+          ports:
+            - containerPort: 5432
