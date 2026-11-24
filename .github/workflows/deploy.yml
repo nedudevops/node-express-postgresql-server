@@ -1,4 +1,5 @@
-name: Build and Publish Docker Image
+
+name: Build and Deploy Application
 
 on:
   push:
@@ -11,7 +12,7 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: self-hosted
 
     steps:
@@ -38,3 +39,17 @@ jobs:
           IMAGE_NAME=ghcr.io/nedudevops/node-express-postgresql-server
           docker push "$IMAGE_NAME:$GITHUB_SHA"
           docker push "$IMAGE_NAME:latest"
+
+      - name: Deploy to Kubernetes
+        run: |
+          IMAGE_NAME=ghcr.io/nedudevops/node-express-postgresql-server
+
+          minikube kubectl -- set image \
+            deployment/node-app \
+            node-app="$IMAGE_NAME:$GITHUB_SHA" \
+            -n devops-assessment
+
+          minikube kubectl -- rollout status \
+            deployment/node-app \
+            -n devops-assessment \
+            --timeout=180s
