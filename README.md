@@ -17,6 +17,7 @@ The DevOps implementation includes:
 - Automated Docker image building and publishing to GitHub Container Registry (GHCR).
 - Continuous Integration and Continuous Deployment (CI/CD) using GitHub Actions.
 - Automated application deployment to a local Minikube Kubernetes cluster.
+- A self-hosted GitHub Actions runner configured as a background systemd service.
 
 **An important project constraint was to deploy the existing application without modifying its original application source code.** All deployment-related changes were implemented through Docker, Kubernetes, and CI/CD configuration.
 
@@ -35,6 +36,7 @@ The DevOps implementation includes:
 | Kubernetes Secrets | Configuration and credential management | Keeps database credentials outside the application manifests. |
 | PersistentVolumeClaim | Persistent database storage | Provides storage for PostgreSQL beyond the lifecycle of an individual Pod. |
 | socat | Database connection proxy | Bridges the application's localhost database connection to the PostgreSQL Kubernetes Service without changing application code. |
+| systemd | Linux service management | Keeps the self-hosted GitHub Actions runner running in the background and starts it automatically when Ubuntu boots. |
 
 ## 3. Project Architecture
 
@@ -52,37 +54,37 @@ The Node.js application is exposed externally through a Kubernetes NodePort Serv
 ### Application architecture
 
 ```text
-                  GitHub Repository
-                         |
-                         v
-                  GitHub Actions
-                         |
-                  Build Docker Image
-                         |
-                         v
-              GitHub Container Registry
-                         |
-                         v
-                 Minikube Cluster
-                         |
-                 Kubernetes Deployment
-                         |
-              +----------------------+
-              |   Node.js Pod        |
-              |                      |
-              |  Node.js Application |
-              |          |           |
-              |    Database Proxy    |
-              +----------|-----------+
-                         |
-                         v
-                 PostgreSQL Service
-                         |
-                         v
-                 PostgreSQL Pod
-                         |
-                         v
-                 Persistent Storage
+                   GitHub Repository
+                          |
+                          v
+                   GitHub Actions
+                          |
+                   Build Docker Image
+                          |
+                          v
+               GitHub Container Registry
+                          |
+                          v
+                  Minikube Cluster
+                          |
+                  Kubernetes Deployment
+                          |
+               +----------------------+
+               |   Node.js Pod        |
+               |                      |
+               |  Node.js Application |
+               |          |           |
+               |    Database Proxy    |
+               +----------|-----------+
+                          |
+                          v
+                  PostgreSQL Service
+                          |
+                          v
+                  PostgreSQL Pod
+                          |
+                          v
+                  Persistent Storage
 ```
 
 ## 4. Repository Structure
@@ -392,6 +394,66 @@ Docker images are published to:
 ghcr.io/nedudevops/node-express-postgresql-server
 ```
 
+### Self-Hosted GitHub Actions Runner
+
+This project uses a self-hosted GitHub Actions runner installed on an Ubuntu virtual machine running VirtualBox.
+
+The runner is configured as a systemd service so it operates in the background without requiring an interactive terminal.
+
+**Benefits:**
+
+- Runs GitHub Actions jobs directly on the Ubuntu VM.
+- Starts automatically when Ubuntu boots.
+- Allows the deployment workflow to access the local Docker environment and Minikube cluster.
+- Eliminates the need to manually run `./run.sh` in an open terminal.
+
+#### Runner installation and configuration
+
+The runner was downloaded, configured, and registered with the GitHub repository using the GitHub Actions runner setup instructions.
+
+After registration, the service was installed from the runner directory:
+
+```bash
+cd ~/actions-runner
+sudo ./svc.sh install
+```
+
+The service was then started:
+
+```bash
+sudo ./svc.sh start
+```
+
+The service installation enables it to start automatically when Ubuntu boots.
+
+#### Runner management commands
+
+Run these commands from `~/actions-runner`:
+
+```bash
+# Check runner status
+sudo ./svc.sh status
+
+# Start the runner
+sudo ./svc.sh start
+
+# Stop the runner
+sudo ./svc.sh stop
+
+# Restart the runner
+sudo ./svc.sh restart
+```
+
+#### Important operational notes
+
+- The Ubuntu VM must be powered on and connected to the internet.
+- The runner service must be active for GitHub Actions jobs to execute.
+- Docker must be available to the runner.
+- Minikube must be running for Kubernetes deployment jobs to succeed.
+- After restarting the VM, verify that the runner service is active and start Minikube if it is not already running.
+
+The runner can now operate in the background without keeping a terminal open.
+
 ## 10. Assumptions and Engineering Trade-offs
 
 Several decisions were made to meet the assessment requirements while keeping the implementation manageable and preserving the original application.
@@ -428,11 +490,13 @@ The original application uses a localhost PostgreSQL connection rather than an e
 
 ### 10.5 Self-hosted GitHub Actions runner
 
-**Decision:** A self-hosted runner was installed on the Ubuntu virtual machine.
+**Decision:** A self-hosted runner was installed on the Ubuntu virtual machine and configured as a systemd service.
 
 **Reason:** It provides access to the local Docker environment and Minikube cluster, allowing the workflow to deploy directly to the local Kubernetes environment.
 
-**Trade-off:** The virtual machine must remain powered on, and the runner must be online for automated deployments to execute.
+**Trade-off:** The virtual machine must remain powered on and connected to the internet. The runner service must be active, and Minikube must be running for automated Kubernetes deployments to succeed.
+
+Configuring the runner as a systemd service removes the need to keep an interactive terminal open and allows the runner to start automatically when Ubuntu boots.
 
 ### 10.6 Kubernetes Secrets
 
@@ -469,6 +533,7 @@ The implementation was tested at several stages.
 - Successfully built and published the Docker image to GHCR.
 - Successfully updated the Kubernetes Deployment using the commit-specific image tag.
 - Confirmed that the Kubernetes rollout completed successfully.
+- Confirmed that the self-hosted runner successfully connected to GitHub and operated as a background systemd service.
 
 ### API validation
 
@@ -479,6 +544,7 @@ The following endpoints were successfully tested against the deployed applicatio
 | `GET /users` | Passed |
 | `GET /users/1` | Passed |
 | `GET /messages` | Passed |
+| `GET /messages/1` | Passed |
 
 ## 12. What I Would Improve With More Time
 
@@ -554,6 +620,7 @@ This assessment demonstrates the ability to:
 - Build and publish Docker images automatically.
 - Implement CI/CD using GitHub Actions.
 - Automate Kubernetes application deployments.
+- Configure a self-hosted GitHub Actions runner as a systemd service.
 - Test and validate deployed REST API endpoints.
 - Identify infrastructure trade-offs and potential production improvements.
 
