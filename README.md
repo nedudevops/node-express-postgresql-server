@@ -1,54 +1,75 @@
 # Node.js Express PostgreSQL API – DevOps Assessment
 
-[![Build and Deploy Application](https://github.com/nedudevops/node-express-postgresql-server/actions/workflows/deploy.yml/badge.svg?branch=master)](https://github.com/nedudevops/node-express-postgresql-server/actions/workflows/deploy.yml)
-
 ## 1. Project Overview
 
 This project demonstrates the containerization and deployment of an existing Node.js REST API application using Docker and Kubernetes.
 
-The application uses Express.js to provide REST API endpoints and PostgreSQL as its database.
+The original application was created by [Rwieruch](https://github.com/rwieruch/node-express-postgresql-server). It is a Node.js and Express REST API that uses PostgreSQL as its database.
 
-The DevOps implementation includes:
+The objective of this assessment is to take the original application, containerize it, deploy it to a local Kubernetes cluster, and implement an automated CI/CD pipeline.
+
+The implementation includes:
 
 - Docker containerization of the existing Node.js application.
 - PostgreSQL deployment on Kubernetes.
-- Persistent storage using Kubernetes PersistentVolumeClaims.
-- Kubernetes Secrets for database credentials and application environment variables.
+- Persistent database storage using Kubernetes PersistentVolumeClaims.
+- Kubernetes Secrets for application configuration and database credentials.
 - Automated Docker image building and publishing to GitHub Container Registry (GHCR).
-- Continuous Integration and Continuous Deployment (CI/CD) using GitHub Actions.
-- Automated application deployment to a local Minikube Kubernetes cluster.
+- Continuous Integration and Continuous Deployment using GitHub Actions.
+- Automated deployment to a local Minikube Kubernetes cluster.
 - A self-hosted GitHub Actions runner configured as a background systemd service.
 
-**An important project constraint was to deploy the existing application without modifying its original application source code.** All deployment-related changes were implemented through Docker, Kubernetes, and CI/CD configuration.
+**Important:** The original application source code is preserved without modification. All DevOps-related additions are implemented through Docker, Kubernetes, and GitHub Actions configuration files.
 
-## 2. Technology Stack and Why I Chose These Tools
+## 2. Original Repository and Final Repository
 
-| Tool / Technology | Purpose | Why I Chose It |
-|---|---|---|
-| Ubuntu 26.04 LTS | Operating system | Provides the Linux environment for development and deployment. |
-| VirtualBox | Virtualization | Provides an isolated Ubuntu virtual machine. |
-| Git | Version control | Tracks changes and manages the project repository. |
-| Node.js | Application runtime | The existing application is built with Node.js. |
-| Express.js | REST API framework | Powers the existing API endpoints. |
-| PostgreSQL | Relational database | The database technology already used by the application. |
-| Docker | Containerization | Packages the application and its dependencies into a portable image. |
-| Docker Compose | Local container management | Runs the local PostgreSQL and pgAdmin services. |
-| Kubernetes | Container orchestration | Manages application and database containers, deployments, services, and storage. |
-| Minikube | Local Kubernetes environment | Provides a practical way to run and test Kubernetes locally. |
-| GitHub Actions | CI/CD automation | Automates the build and deployment process whenever changes are pushed to GitHub. |
-| GitHub Container Registry | Container image registry | Stores versioned Docker images associated with the GitHub repository. |
-| Kubernetes Secrets | Configuration and credential management | Keeps database credentials outside application manifests. |
-| PersistentVolumeClaim | Persistent database storage | Provides storage for PostgreSQL beyond the lifecycle of an individual Pod. |
-| socat | Database connection proxy | Bridges the application's localhost database connection to the PostgreSQL Kubernetes Service without changing application code. |
-| systemd | Linux service management | Keeps the self-hosted GitHub Actions runner running in the background and starts it automatically when Ubuntu boots. |
+This project starts from the original repository:
 
-## 3. Environment and Prerequisites
+**Original repository:**
+https://github.com/rwieruch/node-express-postgresql-server
 
-### 3.1 Development environment
+The completed implementation is published in my fork:
+
+**My repository:**
+https://github.com/nedudevops/node-express-postgresql-server
+
+The original repository contains the application source code. It does not contain the Dockerfile, Kubernetes manifests, or GitHub Actions workflow created for this assessment.
+
+Those files are added during the implementation.
+
+The relationship between the repositories is:
+
+| Repository | Purpose |
+|---|---|
+| `rwieruch/node-express-postgresql-server` | Original application used as the starting point |
+| `nedudevops/node-express-postgresql-server` | My fork containing the completed DevOps implementation |
+
+## 3. Technology Stack
+
+| Tool / Technology | Purpose |
+|---|---|
+| Ubuntu 26.04 LTS | Operating system |
+| VirtualBox | Virtualization |
+| Git | Version control |
+| Node.js | Application runtime |
+| Express.js | REST API framework |
+| PostgreSQL | Relational database |
+| Docker | Application containerization |
+| Docker Compose | Local container management |
+| Kubernetes | Container orchestration |
+| Minikube | Local Kubernetes environment |
+| GitHub Actions | CI/CD automation |
+| GitHub Container Registry | Docker image storage |
+| Kubernetes Secrets | Application configuration and credentials |
+| PersistentVolumeClaim | Persistent PostgreSQL storage |
+| socat | Database connection proxy |
+| systemd | Self-hosted runner service management |
+
+## 4. Environment and Prerequisites
 
 The project was implemented and tested using:
 
-| Component | Environment |
+| Component | Version / Configuration |
 |---|---|
 | Operating System | Ubuntu 26.04 LTS |
 | Virtualization | Oracle VirtualBox |
@@ -60,13 +81,8 @@ The project was implemented and tested using:
 | Minikube | 1.39.0 |
 | Kubernetes | 1.37.0 |
 | GitHub Actions Runner | 2.338.2 |
-| Container Registry | GitHub Container Registry |
 
-These are the versions used during implementation. Other compatible versions may work.
-
-### 3.2 Required tools
-
-Before deploying the application, install the following:
+Required tools:
 
 - Git
 - Node.js and npm
@@ -74,15 +90,13 @@ Before deploying the application, install the following:
 - Docker Compose plugin
 - Minikube
 - curl and wget
-- A GitHub account
+- GitHub account
 
-The Kubernetes command-line client can be accessed through `minikube kubectl`, so a separate kubectl installation is not required for this implementation.
+The instructions below describe the environment used for this assessment. Compatible versions may also work.
 
-## 4. Installing the Required Tools on Ubuntu
+## 5. Installing the Required Tools on Ubuntu
 
-The following instructions describe the Ubuntu environment used for this assessment.
-
-### 4.1 Update Ubuntu
+### 5.1 Update Ubuntu
 
 ```bash
 sudo apt update
@@ -101,15 +115,15 @@ Verify Git:
 git --version
 ```
 
-### 4.2 Install Node.js and npm
+### 5.2 Install Node.js and npm
 
-Install Node.js 20 using Node Version Manager (nvm):
+Install Node Version Manager:
 
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 ```
 
-Reload the shell configuration:
+Reload the shell:
 
 ```bash
 source ~/.bashrc
@@ -122,14 +136,14 @@ nvm install 20
 nvm use 20
 ```
 
-Verify the installations:
+Verify:
 
 ```bash
 node --version
 npm --version
 ```
 
-### 4.3 Install Docker Engine and Docker Compose
+### 5.3 Install Docker Engine and Docker Compose
 
 Install the required packages:
 
@@ -144,14 +158,14 @@ Create the Docker keyring directory:
 sudo install -m 0755 -d /etc/apt/keyrings
 ```
 
-Download the official Docker signing key:
+Download the Docker signing key:
 
 ```bash
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
   -o /etc/apt/keyrings/docker.asc
 ```
 
-Set the correct permissions:
+Set permissions:
 
 ```bash
 sudo chmod a+r /etc/apt/keyrings/docker.asc
@@ -176,7 +190,7 @@ Update package lists:
 sudo apt update
 ```
 
-Install Docker Engine, Docker CLI, containerd, Buildx, and Docker Compose:
+Install Docker:
 
 ```bash
 sudo apt install -y docker-ce docker-ce-cli containerd.io \
@@ -189,35 +203,21 @@ Start Docker:
 sudo systemctl enable --now docker
 ```
 
-Verify Docker:
+Verify:
 
 ```bash
 sudo docker version
-```
-
-Verify Docker Compose:
-
-```bash
 docker compose version
 ```
 
 #### Configure Docker to run without sudo
 
-Add your Ubuntu user to the Docker group:
-
 ```bash
 sudo usermod -aG docker $USER
-```
-
-Apply the group membership in the current terminal:
-
-```bash
 newgrp docker
 ```
 
-Alternatively, log out and log back in.
-
-Verify Docker access:
+Verify:
 
 ```bash
 docker ps
@@ -227,7 +227,7 @@ If the command works without `sudo`, Docker permissions are configured.
 
 **Security note:** Membership in the Docker group grants highly privileged access to the host. Only trusted users should be added.
 
-### 4.4 Install Minikube
+### 5.4 Install Minikube
 
 Download Minikube version 1.39.0:
 
@@ -235,13 +235,13 @@ Download Minikube version 1.39.0:
 curl -LO https://storage.googleapis.com/minikube/releases/v1.39.0/minikube-linux-amd64
 ```
 
-Install the binary:
+Install:
 
 ```bash
 sudo install minikube-linux-amd64 /usr/local/bin/minikube
 ```
 
-Verify the installation:
+Verify:
 
 ```bash
 minikube version
@@ -259,78 +259,140 @@ Verify the cluster:
 minikube kubectl -- get nodes
 ```
 
-The expected result is a Kubernetes node with a `Ready` status.
-
-### 4.5 Verify Kubernetes access
-
-This project uses Minikube's bundled kubectl command:
-
-```bash
-minikube kubectl -- get nodes
-```
-
-Check all Kubernetes system Pods:
+Check Kubernetes system Pods:
 
 ```bash
 minikube kubectl -- get pods -A
 ```
 
-Check the Kubernetes StorageClasses:
+Check StorageClasses:
 
 ```bash
 minikube kubectl -- get storageclass
 ```
 
-The default Minikube StorageClass is used for PostgreSQL persistent storage.
+This project uses `minikube kubectl --` to run Kubernetes commands.
 
-## 5. Repository Structure
+## 6. Forking and Cloning the Original Repository
+
+This is the starting point of the actual project implementation.
+
+### Step 1: Fork the original repository
+
+Open:
+
+https://github.com/rwieruch/node-express-postgresql-server
+
+On GitHub:
+
+1. Click **Fork**.
+2. Select your GitHub account.
+3. Create the fork.
+
+The fork should be available at:
 
 ```text
-node-express-postgresql-server/
-│
-├── .github/
-│   └── workflows/
-│       └── deploy.yml
-│
-├── k8s/
-│   ├── node-app.yaml
-│   ├── node-app-service.yaml
-│   ├── postgres.yaml
-│   └── postgres-pvc.yaml
-│
-├── src/
-│   ├── index.js
-│   ├── models/
-│   └── routes/
-│
-├── Dockerfile
-├── .dockerignore
-├── docker-compose.yml
-├── package.json
-├── package-lock.json
-└── README.md
+https://github.com/nedudevops/node-express-postgresql-server
 ```
 
-## 6. Running the Project Locally
+At this stage, your fork contains the original application. It does not yet contain the DevOps implementation.
 
-### Step 1: Clone the repository
+### Step 2: Clone the original repository
+
+Clone Rwieruch's original repository, not your fork:
 
 ```bash
-git clone https://github.com/nedudevops/node-express-postgresql-server.git
+git clone https://github.com/rwieruch/node-express-postgresql-server.git
+```
+
+Enter the project directory:
+
+```bash
 cd node-express-postgresql-server
 ```
 
-### Step 2: Install application dependencies
+### Step 3: Configure Git remotes
+
+The original repository is initially configured as the remote named `origin`.
+
+Rename it to `upstream`:
+
+```bash
+git remote rename origin upstream
+```
+
+Add your own fork as the new `origin`:
+
+```bash
+git remote add origin https://github.com/nedudevops/node-express-postgresql-server.git
+```
+
+Verify:
+
+```bash
+git remote -v
+```
+
+The result should show:
+
+```text
+origin    https://github.com/nedudevops/node-express-postgresql-server.git
+upstream  https://github.com/rwieruch/node-express-postgresql-server.git
+```
+
+This arrangement means:
+
+- `upstream` points to the original project.
+- `origin` points to your own GitHub fork.
+
+### Step 4: Push the original project to your fork
+
+Check the current branch:
+
+```bash
+git branch --show-current
+```
+
+The original project uses the `master` branch.
+
+Push it to your fork:
+
+```bash
+git push -u origin master
+```
+
+Your own GitHub repository now contains the original application, ready for the DevOps implementation.
+
+**From this point onward, all new project files and changes will be committed and pushed to your own fork. The original Rwieruch repository remains the upstream source.**
+
+## 7. Understanding the Original Application
+
+Before containerization, inspect the original project.
+
+The application is a Node.js and Express REST API that connects to PostgreSQL.
+
+Its environment variables include:
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Application listening port |
+| `DATABASE` | PostgreSQL database name |
+| `DATABASE_USER` | PostgreSQL username |
+| `DATABASE_PASSWORD` | PostgreSQL password |
+
+The application exposes endpoints for users and messages.
+
+### Install dependencies
+
+From the project root:
 
 ```bash
 npm install
 ```
 
-### Step 3: Configure environment variables
+### Configure environment variables
 
-Create a local `.env` file in the project root.
-
-The application requires:
+Create a local `.env` file:
 
 ```env
 PORT=3000
@@ -339,80 +401,158 @@ DATABASE_USER=your_database_user
 DATABASE_PASSWORD=your_database_password
 ```
 
-Use credentials that match the PostgreSQL configuration in the local Docker Compose setup.
+Use credentials matching the PostgreSQL configuration in the original Docker Compose setup.
 
 Do not commit `.env` to GitHub.
 
-### Step 4: Start PostgreSQL
+### Start the local database
+
+The original repository already contains a Docker Compose configuration for PostgreSQL and pgAdmin.
+
+Start the services:
 
 ```bash
 docker compose up -d
 ```
 
-This starts the PostgreSQL and pgAdmin services defined in the existing Docker Compose configuration.
-
-### Step 5: Start the Node.js application
+### Start the application
 
 ```bash
 npm start
 ```
 
-The application listens on port 3000.
-
-### Step 6: Test the API
-
-```text
-http://localhost:3000/users
-http://localhost:3000/users/1
-http://localhost:3000/messages
-http://localhost:3000/messages/1
-```
-
-Alternatively:
+### Test the original application
 
 ```bash
 curl http://localhost:3000/users
 curl http://localhost:3000/messages
 ```
 
-## 7. Docker Containerization
+Other available routes include:
 
-A Dockerfile was created to package the existing Node.js application into a Docker image.
+```text
+/users/1
+/messages/1
+```
 
-The Dockerfile uses Node.js 20 Alpine as its base image, installs dependencies using `npm ci`, copies the application files, and starts the application using `npm start`.
+This confirms that the original application works before introducing the DevOps configuration.
 
-### Build the Docker image
+## 8. Adding Docker Configuration
+
+The original repository does not contain the Dockerfile or `.dockerignore` created for this assessment.
+
+These files must be added.
+
+### Step 1: Create the Dockerfile
+
+From the project root:
+
+```bash
+nano Dockerfile
+```
+
+Add:
+
+```dockerfile
+# Use Node.js 20
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+```
+
+Save the file.
+
+### Step 2: Create the .dockerignore file
+
+```bash
+nano .dockerignore
+```
+
+Add:
+
+```text
+node_modules
+npm-debug.log
+.git
+.github
+.env
+.env.*
+!.env.example
+coverage
+.DS_Store
+```
+
+This prevents unnecessary files and local environment credentials from being included in the Docker build context.
+
+### Step 3: Build the Docker image
 
 ```bash
 docker build -t node-postgres-api:1.0 .
 ```
 
-### Verify the image
+Verify:
 
 ```bash
 docker images
 ```
 
-### Docker build exclusions
+### Step 4: Test the Docker image
 
-The `.dockerignore` file excludes unnecessary files from the build context, including:
+The existing application defaults to a localhost database connection. For this local test, use the host network so that the container can access the PostgreSQL service running on the Ubuntu host.
 
-- `node_modules`
-- `.git`
-- `.env`
-- npm debug logs
-- Coverage files
+Make sure PostgreSQL is running through Docker Compose.
 
-This reduces unnecessary build context data and helps prevent environment credentials from being copied into the image.
-
-## 8. Kubernetes Deployment
-
-The application and PostgreSQL database are deployed to a local Kubernetes cluster using Minikube.
-
-### Step 1: Start Minikube
+Run:
 
 ```bash
-minikube start --driver=docker
+docker run -d \
+  --name node-api \
+  --network host \
+  --env-file .env \
+  node-postgres-api:1.0
+```
+
+Test:
+
+```bash
+curl http://localhost:3000/users
+curl http://localhost:3000/messages
+```
+
+If the endpoints return the expected data, the Docker image is working.
+
+## 9. Adding Kubernetes Configuration
+
+The original repository does not contain a `k8s/` directory.
+
+We must create it and add the Kubernetes manifests ourselves.
+
+### Step 1: Create the Kubernetes directory
+
+From the project root:
+
+```bash
+mkdir -p k8s
+```
+
+The directory will contain:
+
+```text
+k8s/
+├── postgres-pvc.yaml
+├── postgres.yaml
+├── node-app.yaml
+└── node-app-service.yaml
 ```
 
 ### Step 2: Create the namespace
@@ -421,16 +561,14 @@ minikube start --driver=docker
 minikube kubectl -- create namespace devops-assessment
 ```
 
-### Step 3: Configure Kubernetes Secrets
+### Step 3: Create Kubernetes Secrets
 
-Two Kubernetes Secrets are used:
+Two Secrets are required:
 
-- `postgres-secret`: Stores the PostgreSQL username, password, and database name.
-- `app-secrets`: Stores the application's environment variables.
+- `postgres-secret`: Contains the PostgreSQL username, password, and database name.
+- `app-secrets`: Contains the application's environment variables.
 
-The Secrets are created from the local `.env` file.
-
-From the project root, load the environment variables without printing them:
+Load the local `.env` variables:
 
 ```bash
 set -a
@@ -458,23 +596,45 @@ minikube kubectl -- create secret generic app-secrets \
   --dry-run=client -o yaml | minikube kubectl -- apply -f -
 ```
 
-Clean up the exported shell variables:
+Clean up the exported variables:
 
 ```bash
 unset DATABASE_USER DATABASE_PASSWORD DATABASE
 ```
 
-**Important:** Never commit `.env` or real credentials to GitHub. Kubernetes Secrets are base64-encoded by default, not automatically encrypted. Production environments should use encryption at rest and appropriate access controls.
+### Step 4: Create the PostgreSQL PersistentVolumeClaim
 
-### Step 4: Create persistent storage
+Create the file:
 
-Apply the PersistentVolumeClaim:
+```bash
+nano k8s/postgres-pvc.yaml
+```
+
+Add:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: devops-assessment
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+```
+
+Save the file.
+
+Apply it:
 
 ```bash
 minikube kubectl -- apply -f k8s/postgres-pvc.yaml
 ```
 
-Verify storage:
+Verify:
 
 ```bash
 minikube kubectl -- get pvc -n devops-assessment
@@ -482,7 +642,80 @@ minikube kubectl -- get pvc -n devops-assessment
 
 The PVC should eventually show `Bound`.
 
-### Step 5: Deploy PostgreSQL
+### Step 5: Create the PostgreSQL Deployment and Service
+
+Create:
+
+```bash
+nano k8s/postgres.yaml
+```
+
+Add:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: devops-assessment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14.2-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+            - name: PGDATA
+              value: /data/mydatabase
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /data
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: devops-assessment
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
+```
+
+Save the file.
+
+Apply:
 
 ```bash
 minikube kubectl -- apply -f k8s/postgres.yaml
@@ -495,40 +728,141 @@ minikube kubectl -- rollout status deployment/postgres \
   -n devops-assessment
 ```
 
-### Step 6: Load the application image into Minikube
+### Step 6: Create the Node.js application Deployment
 
-For the initial local deployment, load the locally built image:
+Create:
+
+```bash
+nano k8s/node-app.yaml
+```
+
+Add:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-app
+  namespace: devops-assessment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-app
+  template:
+    metadata:
+      labels:
+        app: node-app
+    spec:
+      containers:
+        - name: node-app
+          image: node-postgres-api:1.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z -w 2 127.0.0.1 5432; do
+                echo "Waiting for database proxy..."
+                sleep 2
+              done
+              echo "Database proxy is ready. Starting Node.js..."
+              npm start
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: app-secrets
+        - name: database-proxy
+          image: alpine/socat
+          command:
+            - socat
+            - TCP-LISTEN:5432,fork,reuseaddr
+            - TCP:postgres:5432
+          ports:
+            - containerPort: 5432
+```
+
+Save the file.
+
+**Why is the database proxy necessary?**
+
+The original application uses localhost for its PostgreSQL connection. In Kubernetes, PostgreSQL runs in a separate Pod.
+
+Instead of modifying the original application source code, a `socat` sidecar container listens on localhost port 5432 and forwards connections to the PostgreSQL Kubernetes Service.
+
+Both containers share the same Pod network namespace, allowing the original application to connect through localhost.
+
+The startup command also waits for the proxy to become available before starting Node.js.
+
+### Step 7: Load the Docker image into Minikube
 
 ```bash
 minikube image load node-postgres-api:1.0
 ```
 
-The CI/CD pipeline subsequently publishes and deploys images from GHCR.
-
-### Step 7: Deploy the Node.js application
+### Step 8: Deploy the Node.js application
 
 ```bash
 minikube kubectl -- apply -f k8s/node-app.yaml
 ```
 
-### Step 8: Expose the application
+### Step 9: Create the Node.js Service
+
+Create:
+
+```bash
+nano k8s/node-app-service.yaml
+```
+
+Add:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-app
+  namespace: devops-assessment
+spec:
+  type: NodePort
+  selector:
+    app: node-app
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30080
+      protocol: TCP
+```
+
+Save the file.
+
+Apply:
 
 ```bash
 minikube kubectl -- apply -f k8s/node-app-service.yaml
 ```
 
-### Step 9: Verify Kubernetes resources
+### Step 10: Verify the Kubernetes resources
 
 ```bash
 minikube kubectl -- get pods -n devops-assessment
-minikube kubectl -- get services -n devops-assessment
+```
+
+```bash
 minikube kubectl -- get deployments -n devops-assessment
+```
+
+```bash
+minikube kubectl -- get services -n devops-assessment
+```
+
+```bash
 minikube kubectl -- get pvc -n devops-assessment
 ```
 
-## 9. Accessing the Deployed Application
+The Node.js Pod should show two ready containers, and the PostgreSQL Pod should show one ready container.
 
-The Node.js application is exposed using a Kubernetes NodePort Service on port 30080.
+## 10. Accessing the Kubernetes Application
 
 Get the Minikube IP:
 
@@ -536,24 +870,17 @@ Get the Minikube IP:
 minikube ip
 ```
 
-Access the API using:
+The application is exposed through NodePort 30080.
+
+Access it using:
 
 ```text
 http://MINIKUBE_IP:30080
 ```
 
-Replace `MINIKUBE_IP` with the address returned by the command.
+Replace `MINIKUBE_IP` with the address returned by Minikube.
 
-### Available GET routes
-
-| Endpoint | Description |
-|---|---|
-| `/users` | Retrieve all users |
-| `/users/1` | Retrieve a user by ID |
-| `/messages` | Retrieve all messages |
-| `/messages/1` | Retrieve a message by ID |
-
-### Test with curl
+### Test the API
 
 ```bash
 curl http://$(minikube ip):30080/users
@@ -567,107 +894,163 @@ curl http://$(minikube ip):30080/messages
 curl http://$(minikube ip):30080/users/1
 ```
 
-## 10. CI/CD Pipeline with GitHub Actions
-
-A GitHub Actions workflow was configured in:
-
-```text
-.github/workflows/deploy.yml
+```bash
+curl http://$(minikube ip):30080/messages/1
 ```
 
-The pipeline automatically runs whenever changes are pushed to the `master` branch. It can also be triggered manually through GitHub Actions.
+## 11. Adding the GitHub Actions CI/CD Pipeline
 
-### Pipeline stages
+The original repository does not contain the GitHub Actions workflow created for this assessment.
 
-**Stage 1 – Checkout**
+We must create it.
 
-GitHub Actions checks out the latest repository code.
+### Step 1: Create the workflow directory
 
-**Stage 2 – Authentication**
+From the project root:
 
-The workflow authenticates with GitHub Container Registry using the automatically provided GitHub Actions token.
+```bash
+mkdir -p .github/workflows
+```
 
-**Stage 3 – Build**
+### Step 2: Create the deployment workflow
 
-Docker builds a new image of the Node.js application.
+```bash
+nano .github/workflows/deploy.yml
+```
 
-**Stage 4 – Publish**
+Add:
 
-The image is published to GitHub Container Registry using two tags:
+```yaml
+name: Build and Deploy Application
 
-- The Git commit SHA.
-- `latest`.
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
-**Stage 5 – Deploy**
+permissions:
+  contents: read
+  packages: write
 
-The workflow updates the Kubernetes Node.js Deployment with the newly published image.
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
 
-**Stage 6 – Verify**
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-Kubernetes rollout status is checked to confirm that the new application deployment becomes available.
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" \
+            --password-stdin
 
-### Container registry
+      - name: Build Docker image
+        run: |
+          IMAGE_NAME=ghcr.io/nedudevops/node-express-postgresql-server
+          docker build \
+            -t "$IMAGE_NAME:$GITHUB_SHA" \
+            -t "$IMAGE_NAME:latest" .
 
-Docker images are published to:
+      - name: Push Docker image
+        run: |
+          IMAGE_NAME=ghcr.io/nedudevops/node-express-postgresql-server
+          docker push "$IMAGE_NAME:$GITHUB_SHA"
+          docker push "$IMAGE_NAME:latest"
+
+      - name: Deploy to Kubernetes
+        run: |
+          IMAGE_NAME=ghcr.io/nedudevops/node-express-postgresql-server
+
+          minikube kubectl -- set image \
+            deployment/node-app \
+            node-app="$IMAGE_NAME:$GITHUB_SHA" \
+            -n devops-assessment
+
+          minikube kubectl -- rollout status \
+            deployment/node-app \
+            -n devops-assessment \
+            --timeout=180s
+```
+
+Save the file.
+
+### Step 3: Configure GitHub Container Registry
+
+The workflow publishes Docker images to:
 
 ```text
 ghcr.io/nedudevops/node-express-postgresql-server
 ```
 
-### Workflow trigger
+The workflow uses GitHub's automatically provided `GITHUB_TOKEN` to authenticate with GHCR.
 
-The workflow runs on pushes to `master`.
+The workflow requires permission to publish packages.
 
-It also supports manual execution using `workflow_dispatch`.
+After the first successful workflow run, check the package settings on GitHub and make the package public if you want Minikube to pull the image without registry authentication.
 
-### GitHub repository permissions
+### Step 4: Understand the pipeline
 
-The GitHub Actions workflow uses repository permissions to read the source code and publish packages.
+The workflow performs these operations:
 
-The `GITHUB_TOKEN` is used for authentication with GHCR, avoiding the need to store a separate registry password in the repository.
+1. **Checkout:** Downloads the latest repository source code.
+2. **Authentication:** Logs in to GitHub Container Registry.
+3. **Build:** Builds the Docker image.
+4. **Publish:** Pushes the image using both the commit SHA and `latest` tags.
+5. **Deploy:** Updates the Kubernetes Node.js Deployment with the newly published image.
+6. **Verify:** Waits for the Kubernetes rollout to complete.
 
-## 11. Self-Hosted GitHub Actions Runner
+The workflow runs automatically whenever a change is pushed to `master`. It can also be triggered manually through GitHub Actions.
 
-This project uses a self-hosted GitHub Actions runner installed on an Ubuntu virtual machine running VirtualBox.
+## 12. Setting Up the Self-Hosted GitHub Actions Runner
 
-The runner has access to the local Docker environment and Minikube cluster, allowing the CI/CD workflow to deploy directly to Kubernetes.
+The CI/CD workflow uses a self-hosted runner installed on the Ubuntu virtual machine.
 
-### 11.1 Runner installation
+This allows GitHub Actions to access the local Docker environment and Minikube cluster.
 
-The runner was downloaded and configured using the Linux x64 instructions provided by GitHub:
+### Step 1: Add a self-hosted runner on GitHub
 
-1. Open the GitHub repository.
-2. Navigate to Settings.
-3. Select Actions.
-4. Select Runners.
-5. Choose New self-hosted runner.
+1. Open your GitHub repository.
+2. Navigate to **Settings**.
+3. Select **Actions**.
+4. Select **Runners**.
+5. Click **New self-hosted runner**.
 6. Select Linux and x64.
-7. Follow the displayed download and configuration instructions.
+7. Follow the commands GitHub displays.
 
-The runner was installed in:
+The runner is installed in:
 
 ```text
 ~/actions-runner
 ```
 
-**Security note:** Runner registration tokens are temporary and should never be committed to the repository or included in documentation.
+Registration tokens are temporary. Never commit them to the repository or include them in documentation.
 
-### 11.2 Configure the runner as a systemd service
+### Step 2: Configure the runner as a systemd service
 
-After registering the runner, install the service:
+From the runner directory:
 
 ```bash
 cd ~/actions-runner
+```
+
+Install the service:
+
+```bash
 sudo ./svc.sh install
 ```
 
-Start the service:
+Start it:
 
 ```bash
 sudo ./svc.sh start
 ```
 
-Verify its status:
+Verify:
 
 ```bash
 sudo ./svc.sh status
@@ -679,197 +1062,226 @@ The expected status is:
 Active: active (running)
 ```
 
-The service is enabled to start automatically when Ubuntu boots.
+### Step 3: Runner management commands
 
-### 11.3 Runner management commands
-
-Run these commands from `~/actions-runner`:
+Run these from `~/actions-runner`:
 
 ```bash
-# Check runner status
+# Check status
 sudo ./svc.sh status
 
-# Start the runner
+# Start
 sudo ./svc.sh start
 
-# Stop the runner
+# Stop
 sudo ./svc.sh stop
 
-# Restart the runner
+# Restart
 sudo ./svc.sh restart
 ```
 
-### 11.4 Operational requirements
+The service is configured to start automatically when Ubuntu boots.
 
-- The Ubuntu VM must be powered on and connected to the internet.
-- The runner service must be active for GitHub Actions jobs to execute.
+### Step 4: Runner requirements
+
+For deployment jobs to work:
+
+- The Ubuntu VM must be powered on.
+- The runner service must be active.
+- The VM must have internet access.
 - Docker must be available to the runner.
-- Minikube must be running for Kubernetes deployment jobs to succeed.
-- After restarting the VM, verify that the runner service is active and start Minikube if it is not already running.
+- Minikube must be running.
 
-Configuring the runner as a systemd service removes the need to keep an interactive terminal open.
+After restarting Ubuntu, verify the runner service and start Minikube if it is not already running.
 
-## 12. Assumptions and Engineering Trade-offs
+## 13. Pushing the Completed Implementation to GitHub
 
-Several decisions were made to meet the assessment requirements while keeping the implementation manageable and preserving the original application.
+At this point, the original application has been supplemented with the Docker, Kubernetes, and GitHub Actions configuration files.
 
-### 12.1 Local Kubernetes instead of a cloud cluster
+Verify the project structure:
 
-**Assumption:** A local Kubernetes environment would be sufficient to demonstrate the deployment requirements.
+```bash
+tree -a -L 3 -I '.git|node_modules'
+```
 
-**Decision:** Minikube was selected to provide a local Kubernetes cluster.
+The important additions should include:
 
-**Trade-off:** This avoids cloud infrastructure costs and makes testing accessible, but it does not demonstrate deployment to a production-grade managed Kubernetes service.
+```text
+Dockerfile
+.dockerignore
+k8s/
+.github/workflows/deploy.yml
+```
 
-### 12.2 Existing application source code was preserved
+Check the Git status:
 
-**Assumption:** The application was to be deployed as provided, without changes to its original source code.
+```bash
+git status
+```
 
-**Decision:** All infrastructure and deployment changes were implemented outside the application source.
+Stage the changes:
 
-**Trade-off:** Some application configuration limitations had to be handled at the infrastructure level.
+```bash
+git add Dockerfile .dockerignore k8s .github/workflows/deploy.yml
+```
 
-### 12.3 Database proxy sidecar
+If you have also updated the README and `.gitignore`, stage those too:
 
-The original application uses a localhost PostgreSQL connection rather than an explicitly configured Kubernetes database hostname.
+```bash
+git add README.md .gitignore
+```
 
-**Decision:** A `socat` sidecar container was introduced to forward localhost port 5432 to the PostgreSQL Kubernetes Service.
+Commit:
 
-**Trade-off:** This avoids modifying application code but introduces an additional container and a proxy dependency within the application Pod.
+```bash
+git commit -m "Add Docker and Kubernetes deployment with GitHub Actions"
+```
 
-### 12.4 Single application and database replicas
+Push to your fork:
+
+```bash
+git push origin master
+```
+
+Because `origin` points to your fork, the changes are pushed to:
+
+https://github.com/nedudevops/node-express-postgresql-server
+
+They are not pushed to Rwieruch's original repository.
+
+### Verify the Git remotes
+
+```bash
+git remote -v
+```
+
+Remember:
+
+- `origin` = your repository.
+- `upstream` = Rwieruch's original repository.
+
+## 14. Testing and Validation
+
+The implementation should be validated at each stage.
+
+### Docker validation
+
+- Docker image builds successfully.
+- Container starts successfully.
+- API endpoints return the expected responses.
+
+### Kubernetes validation
+
+- Minikube cluster is running.
+- PostgreSQL Pod is running.
+- Node.js application Pod is running with both containers ready.
+- PersistentVolumeClaim shows `Bound`.
+- Kubernetes Services are available.
+- Node.js Deployment is available.
+
+Useful commands:
+
+```bash
+minikube kubectl -- get all -n devops-assessment
+```
+
+```bash
+minikube kubectl -- get pvc -n devops-assessment
+```
+
+```bash
+minikube kubectl -- logs deployment/node-app \
+  -n devops-assessment -c node-app
+```
+
+### CI/CD validation
+
+- GitHub Actions workflow starts after a push to `master`.
+- Docker image builds successfully.
+- Image is published to GHCR.
+- Kubernetes Deployment is updated.
+- Rollout completes successfully.
+
+### API validation
+
+| Endpoint | Expected result |
+|---|---|
+| `GET /users` | Returns users |
+| `GET /users/1` | Returns a user |
+| `GET /messages` | Returns messages |
+| `GET /messages/1` | Returns a message |
+
+## 15. Assumptions and Engineering Trade-offs
+
+### 15.1 Local Kubernetes instead of a cloud cluster
+
+**Decision:** Minikube was selected to provide a local Kubernetes environment.
+
+**Trade-off:** This avoids cloud infrastructure costs and makes testing accessible, but does not demonstrate deployment to a production-grade managed Kubernetes service.
+
+### 15.2 Preserving the original application source code
+
+**Decision:** The original application source code was not modified.
+
+**Trade-off:** Some application configuration limitations had to be addressed through infrastructure configuration instead.
+
+### 15.3 Database proxy sidecar
+
+The original application uses localhost for its PostgreSQL connection.
+
+**Decision:** A `socat` sidecar forwards localhost port 5432 to the PostgreSQL Kubernetes Service.
+
+**Trade-off:** This avoids changing the application code but introduces an additional container and proxy dependency.
+
+### 15.4 Single application and database replicas
 
 **Decision:** One replica was configured for the Node.js application and one for PostgreSQL.
 
 **Trade-off:** This is sufficient for a local assessment environment but does not provide high availability or database failover.
 
-### 12.5 Self-hosted GitHub Actions runner
+### 15.5 Self-hosted GitHub Actions runner
 
-**Decision:** A self-hosted runner was installed on the Ubuntu virtual machine and configured as a systemd service.
+**Decision:** A self-hosted runner was installed on the Ubuntu VM and configured as a systemd service.
 
-**Reason:** It provides access to the local Docker environment and Minikube cluster, allowing the workflow to deploy directly to the local Kubernetes environment.
+**Reason:** It provides access to the local Docker environment and Minikube cluster.
 
-**Trade-off:** The virtual machine must remain powered on and connected to the internet. Minikube must also be running for Kubernetes deployment jobs to succeed.
+**Trade-off:** The VM must remain powered on and connected to the internet. Minikube must also be running for deployment jobs to succeed.
 
-### 12.6 Kubernetes Secrets
+### 15.6 Kubernetes Secrets
 
-**Decision:** Database credentials and application environment variables were supplied through Kubernetes Secrets.
+**Decision:** Application configuration and database credentials were supplied through Kubernetes Secrets.
 
-**Trade-off:** Kubernetes Secrets help separate sensitive configuration from application manifests, but production deployments should use appropriate encryption-at-rest and access-control policies.
+**Trade-off:** Kubernetes Secrets separate configuration from application manifests, but production deployments should use encryption at rest and appropriate access controls.
 
-### 12.7 Database initialization behavior
+### 15.7 Database initialization behavior
 
 The original application includes database synchronization behavior that recreates tables on startup.
 
-**Trade-off:** This is convenient for a demonstration application, but it is not appropriate for production data management because application restarts can result in data loss. A production implementation should use controlled database migrations.
+**Trade-off:** This is convenient for a demonstration application, but is not appropriate for production data management because application restarts can result in data loss. A production implementation should use controlled database migrations.
 
-## 13. Testing and Validation
+## 16. What I Would Improve With More Time
 
-The implementation was tested at several stages.
-
-### Docker validation
-
-- Successfully built the Node.js Docker image.
-- Successfully ran the container and verified API responses.
-
-### Kubernetes validation
-
-- Confirmed that the Minikube cluster was running.
-- Confirmed that the PostgreSQL Pod was running.
-- Confirmed that the Node.js application Pod was running with both containers ready.
-- Confirmed that the PostgreSQL PersistentVolumeClaim was bound.
-- Confirmed that the Node.js Deployment was available.
-
-### CI/CD validation
-
-- Successfully executed the GitHub Actions workflow.
-- Successfully built and published the Docker image to GHCR.
-- Successfully updated the Kubernetes Deployment using the commit-specific image tag.
-- Confirmed that the Kubernetes rollout completed successfully.
-- Confirmed that the self-hosted runner successfully connected to GitHub and operated as a background systemd service.
-- Verified multiple successful GitHub Actions workflow runs.
-
-### API validation
-
-The following endpoints were successfully tested against the deployed application:
-
-| Endpoint | Result |
-|---|---|
-| `GET /users` | Passed |
-| `GET /users/1` | Passed |
-| `GET /messages` | Passed |
-| `GET /messages/1` | Passed |
-
-## 14. What I Would Improve With More Time
-
-Although the assessment implementation is functional, several improvements would make it more suitable for a production environment.
-
-### 14.1 Use a managed Kubernetes environment
-
-Deploy the application to a managed Kubernetes platform such as Amazon EKS, Azure AKS, or Google GKE.
-
-This would provide a more realistic production deployment environment.
-
-### 14.2 Improve database connection configuration
-
-Where application changes are permitted, configure the database hostname through environment variables rather than relying on localhost.
-
-This would remove the need for the `socat` sidecar proxy.
-
-### 14.3 Introduce database migrations
-
-Replace destructive database synchronization with a controlled database migration strategy.
-
-This would help preserve application data across deployments and restarts.
-
-### 14.4 Improve application availability
-
-Introduce multiple application replicas, readiness and liveness probes, and appropriate resource requests and limits.
-
-For PostgreSQL, use a more robust database architecture with appropriate backup and recovery procedures rather than simply increasing replicas.
-
-### 14.5 Strengthen security
-
+- Deploy to a managed Kubernetes platform such as Amazon EKS, Azure AKS, or Google GKE.
+- Configure the database hostname through environment variables if application changes are permitted, removing the need for the `socat` sidecar.
+- Replace destructive database synchronization with controlled migrations.
+- Introduce readiness and liveness probes.
+- Add resource requests and limits.
+- Implement database backup and recovery procedures.
 - Use a dedicated secret-management solution.
-- Enable encryption at rest for Kubernetes Secrets.
 - Apply stricter Kubernetes RBAC permissions.
-- Use non-root containers where supported.
-- Scan Docker images for known vulnerabilities.
-- Add TLS and appropriate network security controls.
+- Scan Docker images for vulnerabilities.
+- Introduce automated unit and integration tests.
+- Add monitoring and centralized logging using Prometheus and Grafana.
+- Explore Helm charts or another infrastructure-as-code approach.
 
-### 14.6 Add automated testing
-
-Introduce automated tests into the GitHub Actions pipeline.
-
-For example:
-
-- Dependency and build checks.
-- Unit tests.
-- API integration tests.
-- Docker image vulnerability scanning.
-- Deployment smoke tests.
-
-### 14.7 Improve monitoring and observability
-
-Introduce monitoring and centralized logging using tools such as Prometheus, Grafana, and an appropriate log aggregation platform.
-
-This would make it easier to identify application failures, resource bottlenecks, and database issues.
-
-### 14.8 Improve deployment strategy
-
-Introduce deployment strategies such as rolling updates with more comprehensive health checks, or blue-green deployment for environments requiring reduced downtime.
-
-### 14.9 Improve infrastructure management
-
-Manage Kubernetes resources through Helm charts or another infrastructure-as-code approach to make deployments easier to configure, reproduce, and maintain.
-
-## 15. Project Outcome
+## 17. Project Outcome
 
 This assessment demonstrates the ability to:
 
+- Start from an existing GitHub application repository.
+- Fork and manage the original repository using Git.
 - Prepare a Linux environment for DevOps activities.
 - Install and configure the required development and deployment tools.
-- Use Git and GitHub for version control.
 - Containerize an existing Node.js application using Docker.
 - Deploy Node.js and PostgreSQL to Kubernetes.
 - Configure persistent database storage.
@@ -881,4 +1293,4 @@ This assessment demonstrates the ability to:
 - Test and validate deployed REST API endpoints.
 - Identify infrastructure trade-offs and potential production improvements.
 
-**The application was successfully containerized, deployed, and tested on a local Minikube Kubernetes cluster, with an operational GitHub Actions pipeline automating image publication and deployment.**
+**The original Node.js and PostgreSQL application was successfully containerized, deployed, and tested on a local Minikube Kubernetes cluster. A GitHub Actions pipeline was implemented to automate Docker image publication and Kubernetes deployment to my own GitHub repository.**
