@@ -26,11 +26,13 @@ The implementation includes:
 This project starts from the original repository:
 
 **Original repository:**
+
 https://github.com/rwieruch/node-express-postgresql-server
 
 The completed implementation is published in my fork:
 
 **My repository:**
+
 https://github.com/nedudevops/node-express-postgresql-server
 
 The original repository contains the application source code. It does not contain the Dockerfile, Kubernetes manifests, or GitHub Actions workflow created for this assessment.
@@ -393,6 +395,12 @@ npm install
 ### Configure environment variables
 
 Create a local `.env` file:
+
+```bash
+nano .env
+```
+
+Add:
 
 ```env
 PORT=3000
@@ -1122,7 +1130,7 @@ systemctl is-enabled docker
 systemctl is-active docker
 ```
 
-Both commands should report `enabled` and `active`, respectively.
+The commands should report `enabled` and `active`, respectively.
 
 ### Step 2: Create a systemd service for Minikube
 
@@ -1134,7 +1142,7 @@ Create the service file:
 sudo nano /etc/systemd/system/minikube.service
 ```
 
-Add:
+Add the following configuration:
 
 ```ini
 [Unit]
@@ -1145,9 +1153,9 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-User=chinadizi
-Group=chinadizi
-WorkingDirectory=/home/chinadizi
+User=YOUR_UBUNTU_USERNAME
+Group=YOUR_UBUNTU_USERNAME
+WorkingDirectory=/home/YOUR_UBUNTU_USERNAME
 ExecStart=/usr/local/bin/minikube start --driver=docker
 ExecStop=/usr/local/bin/minikube stop
 RemainAfterExit=yes
@@ -1155,6 +1163,16 @@ TimeoutStartSec=0
 
 [Install]
 WantedBy=multi-user.target
+```
+
+**Important:** Replace `YOUR_UBUNTU_USERNAME` in `User`, `Group`, and `WorkingDirectory` with the Ubuntu username you use to run Minikube.
+
+For example, if your username is `chinadizi`, use:
+
+```ini
+User=chinadizi
+Group=chinadizi
+WorkingDirectory=/home/chinadizi
 ```
 
 Save the file.
@@ -1201,14 +1219,88 @@ minikube kubectl -- get nodes
 
 The Minikube host, kubelet, and API server should be running, and the Kubernetes node should show `Ready`.
 
-### Step 3: Make the GitHub Actions runner wait for Minikube
+### Step 3: Identify your GitHub Actions runner service name
+
+The GitHub Actions runner service name is generated using the repository owner, repository name, and runner name selected during runner registration.
+
+**Do not assume that the service name in an example will match yours.**
+
+To identify your actual runner service, first navigate to your runner installation directory:
+
+```bash
+cd ~/actions-runner
+```
+
+Check the runner service:
+
+```bash
+sudo ./svc.sh status
+```
+
+You can also list the registered runner services:
+
+```bash
+sudo systemctl list-units --type=service --all | grep actions.runner
+```
+
+For example, your output might look like this:
+
+```text
+actions.runner.nedudevops-neps-01.Ubuntu26-04-devops-replica.service loaded inactive dead GitHub Actions Runner (nedudevops-neps-01.Ubuntu26-04-devops-replica)
+```
+
+**What should you copy?**
+
+Copy only the service filename:
+
+```text
+actions.runner.nedudevops-neps-01.Ubuntu26-04-devops-replica.service
+```
+
+Do not copy `loaded`, `inactive`, `dead`, or the description after the service name.
+
+You can also list the installed service files directly:
+
+```bash
+ls /etc/systemd/system/actions.runner.*.service
+```
+
+This may produce output such as:
+
+```text
+/etc/systemd/system/actions.runner.nedudevops-neps-01.Ubuntu26-04-devops-replica.service
+```
+
+In this case, copy the service name after `/etc/systemd/system/`, excluding the directory path.
+
+**Set your actual service name in a variable:**
+
+Paste the service filename you copied between the quotation marks:
+
+```bash
+RUNNER_SERVICE="actions.runner.nedudevops-neps-01.Ubuntu26-04-devops-replica.service"
+```
+
+The example above represents a particular setup. Your service name may be different.
+
+Verify that the variable contains the correct name:
+
+```bash
+echo "$RUNNER_SERVICE"
+```
+
+The output should match the service filename you copied.
+
+**Important:** If you have registered multiple self-hosted runners on the same VM, identify the correct service for the runner you want to configure. Do not simply choose the first service returned by the commands.
+
+### Step 4: Make the GitHub Actions runner wait for Minikube
 
 The runner must not start before the Minikube startup service has completed. Add a systemd dependency to the runner service.
 
-Open the runner service override:
+Open the runner service override using the variable you created:
 
 ```bash
-sudo systemctl edit actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+sudo systemctl edit "$RUNNER_SERVICE"
 ```
 
 Add:
@@ -1221,30 +1313,39 @@ After=minikube.service
 
 Save and exit the editor.
 
-Reload systemd and restart the runner:
+Reload systemd:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+```
+
+Restart the runner:
+
+```bash
+sudo systemctl restart "$RUNNER_SERVICE"
 ```
 
 Check the runner:
 
 ```bash
-sudo systemctl status actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+sudo systemctl status "$RUNNER_SERVICE"
 ```
 
-The service should show `active (running)`.
+The service should show:
+
+```text
+Active: active (running)
+```
 
 Verify that the dependency is configured:
 
 ```bash
-systemctl show actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service -p Requires -p After
+systemctl show "$RUNNER_SERVICE" -p Requires -p After
 ```
 
 The output should include `minikube.service` in both properties.
 
-### Step 4: Verify automatic recovery after reboot
+### Step 5: Verify automatic recovery after reboot
 
 Restart Ubuntu:
 
@@ -1273,10 +1374,26 @@ minikube kubectl -- get pods -n devops-assessment
 minikube kubectl -- get deployments -n devops-assessment
 ```
 
+**Identify your runner service again after reboot.**
+
+Shell variables do not survive a reboot or a new terminal session. Repeat the service discovery command:
+
+```bash
+sudo systemctl list-units --type=service --all | grep actions.runner
+```
+
+Copy the correct service filename from the output and assign it again:
+
+```bash
+RUNNER_SERVICE="actions.runner.YOUR-ACTUAL-REPOSITORY.YOUR-ACTUAL-RUNNER.service"
+```
+
+Replace the placeholder with your actual service filename.
+
 Check the GitHub Actions runner:
 
 ```bash
-sudo systemctl status actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+sudo systemctl status "$RUNNER_SERVICE"
 ```
 
 The Kubernetes node should become `Ready`, the application and PostgreSQL Pods should return to `Running`, and the runner should become active and reconnect to GitHub.
@@ -1284,7 +1401,6 @@ The Kubernetes node should become `Ready`, the application and PostgreSQL Pods s
 Pods may briefly show transitional states while the cluster is recovering. Wait a short time and check again if they are not immediately ready.
 
 **Startup dependency note:** The runner waits for the Minikube systemd startup command to complete. This does not mean every application Pod is guaranteed to be ready at that exact moment. Kubernetes independently works to restore the configured workloads, and the GitHub Actions deployment workflow includes a rollout-status check for application deployments.
-
 
 ## 14. Pushing the Completed Implementation to GitHub
 
