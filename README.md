@@ -1092,9 +1092,201 @@ For deployment jobs to work:
 - Docker must be available to the runner.
 - Minikube must be running.
 
-After restarting Ubuntu, verify the runner service and start Minikube if it is not already running.
+The runner is configured to start automatically when Ubuntu boots. The Minikube startup service and runner dependency are configured in the next section so that the runner does not begin accepting deployment jobs before Minikube has started.
 
-## 13. Pushing the Completed Implementation to GitHub
+## 13. Automatic Startup and Recovery After VM Reboot
+
+The Ubuntu VM runs Docker, Minikube, and the self-hosted GitHub Actions runner. These services are configured to start automatically after Ubuntu boots.
+
+The startup order is:
+
+1. Docker starts.
+2. Minikube starts using Docker as its driver.
+3. The GitHub Actions runner starts after the Minikube startup service has completed.
+4. Kubernetes brings the application and PostgreSQL Pods back to their desired state.
+
+**Important:** These settings automate startup inside Ubuntu. The VirtualBox VM itself must still be powered on by the host machine.
+
+### Step 1: Make sure Docker starts automatically
+
+Enable Docker and start it immediately:
+
+```bash
+sudo systemctl enable --now docker
+```
+
+Verify that Docker is enabled and active:
+
+```bash
+systemctl is-enabled docker
+systemctl is-active docker
+```
+
+Both commands should report `enabled` and `active`, respectively.
+
+### Step 2: Create a systemd service for Minikube
+
+Minikube is installed under `/usr/local/bin/minikube` and runs under the normal Ubuntu user account, not as root.
+
+Create the service file:
+
+```bash
+sudo nano /etc/systemd/system/minikube.service
+```
+
+Add:
+
+```ini
+[Unit]
+Description=Minikube Kubernetes Cluster
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=chinadizi
+Group=chinadizi
+WorkingDirectory=/home/chinadizi
+ExecStart=/usr/local/bin/minikube start --driver=docker
+ExecStop=/usr/local/bin/minikube stop
+RemainAfterExit=yes
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save the file.
+
+Tell systemd to reload its service definitions:
+
+```bash
+sudo systemctl daemon-reload
+```
+
+Enable Minikube to start automatically at boot:
+
+```bash
+sudo systemctl enable minikube.service
+```
+
+Start the service now:
+
+```bash
+sudo systemctl start minikube.service
+```
+
+Check its status:
+
+```bash
+sudo systemctl status minikube.service
+```
+
+The expected state after startup is:
+
+```text
+Loaded: loaded (...; enabled; ...)
+Active: active (exited)
+```
+
+`active (exited)` is expected here because the service uses `Type=oneshot` and `RemainAfterExit=yes`. The Minikube cluster continues running after the startup command finishes.
+
+Verify the cluster:
+
+```bash
+minikube status
+minikube kubectl -- get nodes
+```
+
+The Minikube host, kubelet, and API server should be running, and the Kubernetes node should show `Ready`.
+
+### Step 3: Make the GitHub Actions runner wait for Minikube
+
+The runner must not start before the Minikube startup service has completed. Add a systemd dependency to the runner service.
+
+Open the runner service override:
+
+```bash
+sudo systemctl edit actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+```
+
+Add:
+
+```ini
+[Unit]
+Requires=minikube.service
+After=minikube.service
+```
+
+Save and exit the editor.
+
+Reload systemd and restart the runner:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+```
+
+Check the runner:
+
+```bash
+sudo systemctl status actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+```
+
+The service should show `active (running)`.
+
+Verify that the dependency is configured:
+
+```bash
+systemctl show actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service -p Requires -p After
+```
+
+The output should include `minikube.service` in both properties.
+
+### Step 4: Verify automatic recovery after reboot
+
+Restart Ubuntu:
+
+```bash
+sudo reboot
+```
+
+After logging back in, check Docker:
+
+```bash
+systemctl is-active docker
+```
+
+Check Minikube:
+
+```bash
+sudo systemctl status minikube.service
+minikube status
+minikube kubectl -- get nodes
+```
+
+Check the application workloads:
+
+```bash
+minikube kubectl -- get pods -n devops-assessment
+minikube kubectl -- get deployments -n devops-assessment
+```
+
+Check the GitHub Actions runner:
+
+```bash
+sudo systemctl status actions.runner.nedudevops-node-express-postgresql-server.ubuntu-minikube-runner.service
+```
+
+The Kubernetes node should become `Ready`, the application and PostgreSQL Pods should return to `Running`, and the runner should become active and reconnect to GitHub.
+
+Pods may briefly show transitional states while the cluster is recovering. Wait a short time and check again if they are not immediately ready.
+
+**Startup dependency note:** The runner waits for the Minikube systemd startup command to complete. This does not mean every application Pod is guaranteed to be ready at that exact moment. Kubernetes independently works to restore the configured workloads, and the GitHub Actions deployment workflow includes a rollout-status check for application deployments.
+
+
+## 14. Pushing the Completed Implementation to GitHub
 
 At this point, the original application has been supplemented with the Docker, Kubernetes, and GitHub Actions configuration files.
 
@@ -1160,7 +1352,7 @@ Remember:
 - `origin` = your repository.
 - `upstream` = Rwieruch's original repository.
 
-## 14. Testing and Validation
+## 15. Testing and Validation
 
 The implementation should be validated at each stage.
 
@@ -1211,21 +1403,21 @@ minikube kubectl -- logs deployment/node-app \
 | `GET /messages` | Returns messages |
 | `GET /messages/1` | Returns a message |
 
-## 15. Assumptions and Engineering Trade-offs
+## 16. Assumptions and Engineering Trade-offs
 
-### 15.1 Local Kubernetes instead of a cloud cluster
+### 16.1 Local Kubernetes instead of a cloud cluster
 
 **Decision:** Minikube was selected to provide a local Kubernetes environment.
 
 **Trade-off:** This avoids cloud infrastructure costs and makes testing accessible, but does not demonstrate deployment to a production-grade managed Kubernetes service.
 
-### 15.2 Preserving the original application source code
+### 16.2 Preserving the original application source code
 
 **Decision:** The original application source code was not modified.
 
 **Trade-off:** Some application configuration limitations had to be addressed through infrastructure configuration instead.
 
-### 15.3 Database proxy sidecar
+### 16.3 Database proxy sidecar
 
 The original application uses localhost for its PostgreSQL connection.
 
@@ -1233,33 +1425,33 @@ The original application uses localhost for its PostgreSQL connection.
 
 **Trade-off:** This avoids changing the application code but introduces an additional container and proxy dependency.
 
-### 15.4 Single application and database replicas
+### 16.4 Single application and database replicas
 
 **Decision:** One replica was configured for the Node.js application and one for PostgreSQL.
 
 **Trade-off:** This is sufficient for a local assessment environment but does not provide high availability or database failover.
 
-### 15.5 Self-hosted GitHub Actions runner
+### 16.5 Self-hosted GitHub Actions runner
 
 **Decision:** A self-hosted runner was installed on the Ubuntu VM and configured as a systemd service.
 
 **Reason:** It provides access to the local Docker environment and Minikube cluster.
 
-**Trade-off:** The VM must remain powered on and connected to the internet. Minikube must also be running for deployment jobs to succeed.
+**Trade-off:** The VM must remain powered on and connected to the internet. Docker and Minikube are configured to start automatically, and the runner is configured to wait for Minikube's startup service before accepting jobs. The application Pods may still need additional time to recover after a reboot.
 
-### 15.6 Kubernetes Secrets
+### 16.6 Kubernetes Secrets
 
 **Decision:** Application configuration and database credentials were supplied through Kubernetes Secrets.
 
 **Trade-off:** Kubernetes Secrets separate configuration from application manifests, but production deployments should use encryption at rest and appropriate access controls.
 
-### 15.7 Database initialization behavior
+### 16.7 Database initialization behavior
 
 The original application includes database synchronization behavior that recreates tables on startup.
 
 **Trade-off:** This is convenient for a demonstration application, but is not appropriate for production data management because application restarts can result in data loss. A production implementation should use controlled database migrations.
 
-## 16. What I Would Improve With More Time
+## 17. What I Would Improve With More Time
 
 - Deploy to a managed Kubernetes platform such as Amazon EKS, Azure AKS, or Google GKE.
 - Configure the database hostname through environment variables if application changes are permitted, removing the need for the `socat` sidecar.
@@ -1274,7 +1466,7 @@ The original application includes database synchronization behavior that recreat
 - Add monitoring and centralized logging using Prometheus and Grafana.
 - Explore Helm charts or another infrastructure-as-code approach.
 
-## 17. Project Outcome
+## 18. Project Outcome
 
 This assessment demonstrates the ability to:
 
